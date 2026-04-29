@@ -1,4 +1,8 @@
 package org.acme.temporal.product.publication.workflows;
 
-public class ProductPublicationResult {
+public record ProductPublicationResult(
+        Long productId,
+        String finalStatus,
+        String message
+) {
 }

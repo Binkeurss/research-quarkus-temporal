@@ -13,5 +13,46 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  temporal-db:
+    image: postgres:16
+    container_name: temporal-db
+    environment:
+      POSTGRES_USER: ${TEMPORAL_DB_USER}
+      POSTGRES_PASSWORD: ${TEMPORAL_DB_PASSWORD}
+      POSTGRES_DB: ${TEMPORAL_DB_NAME}
+    ports:
+      - "${TEMPORAL_DB_PORT}:5432"
+    volumes:
+      - temporal_db_data:/var/lib/postgresql/data
+
+  temporal:
+    image: temporalio/auto-setup:1.25
+    container_name: temporal
+    depends_on:
+      - temporal-db
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: ${TEMPORAL_DB_USER}
+      POSTGRES_PWD: ${TEMPORAL_DB_PASSWORD}
+      POSTGRES_SEEDS: temporal-db
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+    ports:
+      - "${TEMPORAL_GRPC_PORT}:7233"
+    volumes:
+      - ./config/dynamicconfig:/etc/temporal/config/dynamicconfig
+
+  temporal-ui:
+    image: temporalio/ui:2.34.0
+    container_name: temporal-ui
+    depends_on:
+      - temporal
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:8080
+    ports:
+      - "${TEMPORAL_UI_PORT}:8080"
+
 volumes:
   postgres_data:
+  temporal_db_data:

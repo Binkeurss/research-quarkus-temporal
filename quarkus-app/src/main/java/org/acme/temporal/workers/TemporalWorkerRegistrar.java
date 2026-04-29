@@ -1,4 +1,8 @@
 package org.acme.temporal.workers;
 
-public class TemporalWorkerRegistrar {
+import io.temporal.worker.WorkerFactory;
+
+public interface TemporalWorkerRegistrar {
+
+    void register(WorkerFactory workerFactory);
 }

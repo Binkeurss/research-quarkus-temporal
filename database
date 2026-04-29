@@ -1,0 +1,221 @@
+package org.acme.domain;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.*;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "users")
+public class User extends PanacheEntity {
+
+    @Column(nullable = false, unique = true)
+    public String email;
+
+    @Column(nullable = false)
+    public String passwordHash;
+
+    public String fullName;
+
+    @Column(nullable = false)
+    public String role; // OWNER, BUYER
+
+    public LocalDateTime createdAt = LocalDateTime.now();
+}
+
+package org.acme.domain;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.*;
+
+import java.util.List;
+
+@Entity
+@Table(name = "products")
+public class Product extends PanacheEntity {
+
+    @Column(nullable = false)
+    public String name;
+
+    @Column(nullable = false, unique = true)
+    public String slug;
+
+    @Lob
+    public String description;
+
+    public String coverImage;
+
+    public String status;
+
+    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
+    public List<ProductVariant> variants;
+}
+
+package org.acme.domain;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.*;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+@Entity
+@Table(name = "product_variants")
+public class ProductVariant extends PanacheEntity {
+
+    @ManyToOne
+    @JoinColumn(name = "product_id")
+    public Product product;
+
+    @Column(unique = true)
+    public String skuCode;
+
+    public String variantName;
+
+    @Column(nullable = false)
+    public BigDecimal price;
+
+    public Integer stock;
+
+    @OneToMany(mappedBy = "variant", cascade = CascadeType.ALL)
+    public List<VariantAttribute> attributes;
+}
+
+package org.acme.domain;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "attributes")
+public class Attribute extends PanacheEntity {
+
+    @Column(nullable = false, unique = true)
+    public String name; // RAM, SSD
+}
+
+package org.acme.domain;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "attribute_values")
+public class AttributeValue extends PanacheEntity {
+
+    @ManyToOne
+    @JoinColumn(name = "attribute_id")
+    public Attribute attribute;
+
+    @Column(nullable = false)
+    public String value;
+}
+
+package org.acme.domain;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "variant_attributes")
+public class VariantAttribute extends PanacheEntity {
+
+    @ManyToOne
+    @JoinColumn(name = "variant_id")
+    public ProductVariant variant;
+
+    @ManyToOne
+    @JoinColumn(name = "attribute_value_id")
+    public AttributeValue attributeValue;
+}
+
+package org.acme.domain;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.*;
+
+import java.util.List;
+
+@Entity
+@Table(name = "carts")
+public class Cart extends PanacheEntity {
+
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    public User user;
+
+    @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL)
+    public List<CartItem> items;
+}
+
+package org.acme.domain;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "cart_items")
+public class CartItem extends PanacheEntity {
+
+    @ManyToOne
+    @JoinColumn(name = "cart_id")
+    public Cart cart;
+
+    @ManyToOne
+    @JoinColumn(name = "variant_id")
+    public ProductVariant variant;
+
+    public Integer quantity;
+}
+
+package org.acme.domain;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.*;
+
+import java.util.List;
+
+@Entity
+@Table(name = "orders")
+public class Order extends PanacheEntity {
+
+    @ManyToOne
+    @JoinColumn(name = "user_id")
+    public User user;
+
+    public String status;
+
+    public Double totalAmount;
+
+    public String receiverName;
+    public String phone;
+    public String addressLine;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL)
+    public List<OrderItem> items;
+}
+
+package org.acme.domain;
+
+import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "order_items")
+public class OrderItem extends PanacheEntity {
+
+    @ManyToOne
+    @JoinColumn(name = "order_id")
+    public Order order;
+
+    @ManyToOne
+    @JoinColumn(name = "variant_id")
+    public ProductVariant variant;
+
+    public String productName;
+    public String variantName;
+
+    public Double price;
+    public Integer quantity;
+}
+

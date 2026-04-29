@@ -18,6 +18,12 @@ import org.acme.catalog.dtos.ProductCreateRequest;
 import org.acme.catalog.dtos.ProductResponse;
 import org.acme.catalog.dtos.ProductUpdateRequest;
 import org.acme.catalog.services.ProductServices;
+import jakarta.ws.rs.core.Response;
+import org.acme.temporal.product.publication.dtos.StartProductPublicationWorkflowRequest;
+import org.acme.temporal.product.publication.dtos.StartProductPublicationWorkflowResponse;
+import org.acme.temporal.product.publication.services.ProductPublicationWorkflowServices;
+
+import java.util.Map;
 
 @Path("/products")
 @Produces(MediaType.APPLICATION_JSON)
@@ -26,6 +32,9 @@ public class ProductResources {
 
     @Inject
     ProductServices productServices;
+
+    @Inject
+    ProductPublicationWorkflowServices productPublicationWorkflowServices;
 
     @POST
     public ProductResponse create(@Valid ProductCreateRequest request) {
@@ -39,6 +48,11 @@ public class ProductResources {
     ) {
         return productServices.getAll(cursor, limit);
     }
+
+    @GET
+    @Path("/test/{id}")
+    public Long getId(@PathParam("id") Long id) {
+        return id;}
 
     @GET
     @Path("/{id}")
@@ -56,5 +70,29 @@ public class ProductResources {
     @Path("/{id}")
     public void delete(@PathParam("id") Long id) {
         productServices.delete(id);
+    }
+
+    @POST
+    @Path("/{id}/publication-workflow")
+    public Response startPublicationWorkflow(
+            @PathParam("id") Long id,
+            StartProductPublicationWorkflowRequest request
+    ) {
+        String workflowId = productPublicationWorkflowServices.start(
+                id,
+                request != null ? request.reviewDelaySeconds : null,
+                request != null ? request.processingDelaySeconds : null
+        );
+
+        return Response.accepted(new StartProductPublicationWorkflowResponse(workflowId)).build();
+    }
+
+    @GET
+    @Path("/publication-workflows/{workflowId}/step")
+    public Map<String, String> getPublicationWorkflowStep(@PathParam("workflowId") String workflowId) {
+        return Map.of(
+                "workflowId", workflowId,
+                "step", productPublicationWorkflowServices.getCurrentStep(workflowId)
+        );
     }
 }

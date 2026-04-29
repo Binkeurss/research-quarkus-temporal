@@ -1,4 +1,8 @@
 package org.acme.temporal.product.publication.workflows;
 
-public class ProductPublicationCommand {
+public record ProductPublicationCommand(
+        Long productId,
+        long reviewDelaySeconds,
+        long processingDelaySeconds
+) {
 }

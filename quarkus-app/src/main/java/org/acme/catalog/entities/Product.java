@@ -16,7 +16,7 @@ public class Product extends BaseEntity {
     @Column(nullable = false, unique = true, length = 255)
     public String slug;
 
-    @Lob
+    @Column(columnDefinition = "TEXT")
     public String description;
 
     public String coverImage;

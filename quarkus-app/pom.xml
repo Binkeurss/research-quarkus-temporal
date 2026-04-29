@@ -62,6 +62,11 @@
             <version>${temporal.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.quarkiverse.temporal</groupId>
+            <artifactId>quarkus-temporal</artifactId>
+            <version>0.3.0</version>
+        </dependency>
+        <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-junit</artifactId>
             <scope>test</scope>

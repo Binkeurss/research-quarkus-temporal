@@ -1,0 +1,40 @@
+    src/main/java/org/acme/
+    ├── common/
+    │   ├── base/
+    │   │   └── BaseEntity.java
+    │   ├── exception/
+    │   ├── mapper/
+    │   └── util/
+    │
+    ├── catalog/
+    │   ├── entities/
+    │   │   ├── Product.java
+    │   │   ├── ProductVariant.java
+    │   │   ├── ProductImage.java
+    │   │   ├── Attribute.java
+    │   │   ├── AttributeValue.java
+    │   │   └── VariantAttribute.java
+    │   ├── repositories/
+    │   ├── services/
+    │   ├── resources/
+    │   └── dtos/
+    │
+    └── config/
+
+    @MappedSuperclass
+    public abstract class BaseEntity extends PanacheEntity {
+
+        public LocalDateTime createdAt;
+        public LocalDateTime updatedAt;
+
+        @PrePersist
+        void prePersist() {
+            createdAt = LocalDateTime.now();
+            updatedAt = LocalDateTime.now();
+        }
+
+        @PreUpdate
+        void preUpdate() {
+            updatedAt = LocalDateTime.now();
+        }
+    }
