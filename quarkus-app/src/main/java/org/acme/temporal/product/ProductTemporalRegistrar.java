@@ -6,6 +6,8 @@ import io.temporal.worker.WorkerOptions;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.acme.temporal.configs.TemporalConfig;
+import org.acme.temporal.email.notification.activities.EmailActivitiesImpl;
+import org.acme.temporal.email.notification.workflows.EmailNotificationWorkflowImpl;
 import org.acme.temporal.product.publication.activities.ProductPublicationActivitiesImpl;
 import org.acme.temporal.product.publication.workflows.ProductPublicationWorkflowImpl;
 import org.acme.temporal.workers.TemporalWorkerRegistrar;
@@ -18,6 +20,9 @@ public class ProductTemporalRegistrar implements TemporalWorkerRegistrar {
 
     @Inject
     ProductPublicationActivitiesImpl productPublicationActivities;
+
+    @Inject
+    EmailActivitiesImpl emailActivities;
 
     @Override
     public void register(WorkerFactory workerFactory) {
@@ -43,11 +48,13 @@ public class ProductTemporalRegistrar implements TemporalWorkerRegistrar {
         Worker worker = workerFactory.newWorker(config.taskQueue(), workerOptions);
 
         worker.registerWorkflowImplementationTypes(
-                ProductPublicationWorkflowImpl.class
+                ProductPublicationWorkflowImpl.class,
+                EmailNotificationWorkflowImpl.class
         );
 
         worker.registerActivitiesImplementations(
-                productPublicationActivities
+                productPublicationActivities,
+                emailActivities
         );
 
 //        worker.registerWorkflowImplementationTypes(
