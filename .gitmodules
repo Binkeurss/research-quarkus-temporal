@@ -1,0 +1,3 @@
+[submodule "vks-helm-charts"]
+	path = vks-helm-charts
+	url = https://github.com/vngcloud/vks-helm-charts.git
