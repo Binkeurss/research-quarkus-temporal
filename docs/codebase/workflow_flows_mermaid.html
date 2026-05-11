@@ -1,0 +1,247 @@
+<style>
+.tab-bar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+.tab-btn {
+  padding:6px 14px; border-radius:20px; border:1.5px solid var(--color-border-secondary);
+  background:var(--color-background-secondary); color:var(--color-text-secondary);
+  font-size:13px; cursor:pointer; transition:all .15s;
+}
+.tab-btn.active {
+  background:var(--color-text-primary); color:var(--color-background-primary);
+  border-color:var(--color-text-primary);
+}
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+#mmd-container svg { max-width:100%; }
+</style>
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="show('create')">Create Cluster</button>
+  <button class="tab-btn" onclick="show('delete')">Delete Cluster</button>
+  <button class="tab-btn" onclick="show('scale')">Scale</button>
+  <button class="tab-btn" onclick="show('backup')">Backup</button>
+  <button class="tab-btn" onclick="show('operator')">Operator CRD loop</button>
+</div>
+
+<div id="create" class="tab-panel active">
+  <div class="mmd" data-src="sequenceDiagram
+    participant UI as K8S Portal UI
+    participant BE as Backend
+    participant TMP as Temporal
+    participant WF as CreatePostgresCluster Workflow
+    participant OP as CreatePostgresOperator Workflow
+    participant ACT as Activities
+    participant K8S as Kubernetes API
+
+    UI->>BE: POST /postgres-cluster/create
+    BE->>TMP: startWorkflow(CreatePostgresCluster)
+    TMP->>WF: create(userId, body)
+
+    WF->>WF: validateRequestDto
+    WF->>OP: startChildWorkflow(CreatePostgresOperator)
+    
+    OP->>K8S: createNamespace(namespace)
+    OP->>K8S: applySecret (operator secret)
+    OP->>K8S: applyConfig (OperatorConfiguration CRD)
+    OP->>K8S: applyRbac (ClusterRoleBinding)
+    OP->>K8S: applyDeployment (deploy-postgres-operator)
+    OP->>K8S: waitForDeploymentReady (1 replica)
+    OP-->>WF: operator ready
+
+    WF->>K8S: applySecret (postgres username/password)
+    WF->>ACT: createNodeGroup (tuần tự, lấy placementGroupId)
+    WF->>ACT: waitForNodeGroupActive (song song, retry nếu ERROR)
+    
+    WF->>K8S: applyPostgresCRD (Postgresql cluster-xxx)
+    Note over K8S: Operator reconciles CRD → tạo StatefulSet, Pods, PVCs
+    WF->>ACT: waitForPostgresCrdReady (3 replicas)
+    
+    WF->>K8S: applyMonitoring
+    
+    alt Pooler mode
+      WF->>K8S: applyPoolerRW + waitReady
+      WF->>K8S: applyPoolerRO + waitReady
+    else Direct mode
+      WF->>K8S: applyDirectRW + waitReady
+      WF->>K8S: applyDirectRO + waitReady
+    end
+    
+    WF-->>BE: return endpoints (RW/RO, public/private)
+    BE-->>UI: cluster ACTIVE"></div>
+</div>
+
+<div id="delete" class="tab-panel">
+  <div class="mmd" data-src="sequenceDiagram
+    participant BE as Backend
+    participant DEL as DeleteCluster Workflow
+    participant ACT as DeleteClusterActual Workflow
+    participant K8S as Kubernetes API
+    participant NG as NodeGroup Service
+
+    BE->>DEL: delete(userId, body)
+    Note over DEL: Parent workflow dùng PARENT_CLOSE_POLICY_ABANDON
+    DEL->>ACT: executeAsync(child) - không chờ
+    DEL->>ACT: child.getExecution().get() - chờ start
+    DEL-->>BE: return true (parent xong ngay)
+    
+    Note over ACT: Child workflow tiếp tục chạy độc lập
+    ACT->>K8S: deletePostgresCRD
+    ACT->>K8S: waitForCRDDeleted
+    
+    ACT->>K8S: startChildWorkflow(DeletePostgresOperator)
+    Note over K8S: xóa ClusterRoleBinding, StatefulSet, Config, Deployment
+    
+    ACT->>K8S: deletePublicLB (POOLER+DIRECT / RO+RW)
+    ACT->>K8S: deleteAllSvcInNamespace
+    ACT->>K8S: waitForAllSvcDeleted
+    ACT->>K8S: deleteNamespace
+
+    loop Mỗi NodeGroup (song song)
+      ACT->>NG: getNodeGroupDetail
+      ACT->>NG: deleteNodeGroup
+      ACT->>NG: waitForNodeGroupDeleted
+    end
+    ACT->>NG: deletePlacementGroup (distinct)"></div>
+</div>
+
+<div id="scale" class="tab-panel">
+  <div class="mmd" data-src="sequenceDiagram
+    participant BE as Backend
+    participant WF as ScaleCluster Workflow
+    participant NG as NodeGroup Service
+    participant K8S as Kubernetes API
+
+    BE->>WF: scale(userId, body)
+    WF->>WF: validate (newNum != currentNum)
+    WF->>NG: getNodeGroupDetails(currentIds)
+
+    alt Scale-out (tăng nodes)
+      WF->>NG: createNodeGroup mới (tuần tự)
+      WF->>BE: signal parent: cập nhật nodeGroupIds (bao gồm node mới)
+      
+      loop Mỗi node mới (song song, max 3 retries)
+        WF->>NG: waitForNodeGroupActiveOrError
+        alt Status = ERROR
+          WF->>NG: deleteNodeGroup (cũ)
+          WF->>NG: createNodeGroup (mới)
+          WF->>BE: signal parent: nodeGroupIds updated
+        end
+      end
+      
+      WF->>K8S: scalePostgresClusterCRD (numNodes tăng)
+      WF->>K8S: waitForPostgresCrdReady
+    else Scale-in (giảm nodes)
+      WF->>K8S: scalePostgresClusterCRD (numNodes giảm)
+      WF->>K8S: waitForPostgresCrdReady
+      WF->>K8S: getNodeGroupIdsAfterScaleIn
+      
+      loop NodeGroup bị loại (song song)
+        WF->>NG: deleteNodeGroup
+        WF->>NG: waitForNodeGroupDeleted
+        WF->>BE: signal parent: nodeGroupIds giảm
+      end
+    end
+    WF-->>BE: return ScaleResDto (nodeGroupIds, clusterId)"></div>
+</div>
+
+<div id="backup" class="tab-panel">
+  <div class="mmd" data-src="sequenceDiagram
+    participant BE as Backend
+    participant WF as BackupCluster Workflow
+    participant K8S as Kubernetes API
+    participant BKP as Backup Operator
+    participant S3 as S3 Storage
+
+    BE->>WF: backup(userId, body)
+    WF->>K8S: createBackup(namespace, pgCrdName, request)
+    Note over K8S: Tạo Backup CRD object, Operator bắt đầu backup
+
+    K8S->>BKP: trigger backup job
+    BKP->>S3: stream WAL + base backup
+    
+    Note over WF: Workflow dừng lại, chờ signal tối đa 24h
+    WF->>WF: Workflow.await(timeout=24h, () -> syncBackupInfo != null)
+
+    S3-->>BKP: backup complete
+    BKP->>BE: callback với metadata (WAL segment, size, S3 path)
+    BE->>WF: signal syncBackup(SyncBackupInfo)
+    
+    WF->>WF: check backupStatus (failed → throw)
+    WF-->>BE: return BackupResDto (backupName, time, S3 paths, WAL segments)"></div>
+</div>
+
+<div id="operator" class="tab-panel">
+  <div class="mmd" data-src="flowchart TD
+    A[Temporal Activity: applyPostgresCRD] -->|kubectl apply Postgresql CRD| B[K8s API Server / etcd]
+    
+    B -->|watch event: CRD created/updated| C[Postgres Operator reconcile loop]
+    
+    C --> D{Diff desired vs actual}
+    
+    D -->|replicas thiếu| E[Tạo thêm Pod trong StatefulSet]
+    D -->|replicas thừa| F[Xóa Pod, giữ PVC]
+    D -->|config thay đổi| G[Rolling restart pods]
+    D -->|volume size tăng| H[Resize PVC]
+    D -->|whitelist thay đổi| I[Update Service annotations]
+    D -->|state = desired| J[No-op - bỏ qua]
+
+    E --> K[Tạo PVC gắn với pod mới]
+    E --> L[Setup streaming replication từ master]
+    
+    C -->|đọc config| M[OperatorConfiguration CRD]
+    
+    G --> N[Pod restart tuần tự, master last]
+    N --> O[Failover tự động nếu master down]
+    O --> C"></div>
+</div>
+
+<script type="module">
+import mermaid from 'https://esm.sh/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+await document.fonts.ready;
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'base',
+  fontFamily: '"Anthropic Sans", sans-serif',
+  themeVariables: {
+    darkMode: dark,
+    fontSize: '13px',
+    fontFamily: '"Anthropic Sans", sans-serif',
+    lineColor: dark ? '#9c9a92' : '#73726c',
+    textColor: dark ? '#c2c0b6' : '#3d3d3a',
+    primaryColor: dark ? '#2a2a28' : '#f0ede4',
+    primaryTextColor: dark ? '#c2c0b6' : '#3d3d3a',
+    primaryBorderColor: dark ? '#4a4844' : '#b4b2a9',
+    noteBkgColor: dark ? '#1e1d1b' : '#faf8f2',
+    noteTextColor: dark ? '#c2c0b6' : '#3d3d3a',
+    activationBorderColor: dark ? '#888780' : '#5f5e5a',
+    activationBkgColor: dark ? '#2a2a28' : '#f0ede4',
+    sequenceNumberColor: dark ? '#c2c0b6' : '#3d3d3a',
+    labelBoxBkgColor: dark ? '#1a1a18' : '#faf8f2',
+    labelBoxBorderColor: dark ? '#4a4844' : '#b4b2a9',
+    labelTextColor: dark ? '#c2c0b6' : '#3d3d3a',
+  },
+  sequence: { useMaxWidth: true, wrap: true, width: 600 },
+});
+
+async function renderAll() {
+  const divs = document.querySelectorAll('.mmd[data-src]');
+  for (let i = 0; i < divs.length; i++) {
+    const el = divs[i];
+    const src = el.getAttribute('data-src');
+    try {
+      const { svg } = await mermaid.render('mmd-' + i, src);
+      el.innerHTML = svg;
+      el.querySelector('svg').style.maxWidth = '100%';
+    } catch(e) {
+      el.textContent = 'Render error: ' + e.message;
+    }
+  }
+}
+renderAll();
+
+window.show = function(id) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+};
+</script>

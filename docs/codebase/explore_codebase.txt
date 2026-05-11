@@ -1,0 +1,2 @@
+Sử dụng spilo để quản lý master replica
+
