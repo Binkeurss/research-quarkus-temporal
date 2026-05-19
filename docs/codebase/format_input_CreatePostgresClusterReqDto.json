@@ -1,0 +1,34 @@
+[
+    {
+        "postgresClusterId": "0c574c9",
+        "postgresVersion": "17",
+        "flavorId": "flab-843f-11e9512e8",
+        "storageClass": "vtyp02",
+        "volumeSize": 20,
+        "numNodes": 3,
+        "postgresParameters": {},
+        "privateSubnetId": "sub9-96",
+        "publicAccess": false,
+        "encryptionVolume": false,
+        "username": "thanhttn",
+        "password": "CBU3",
+        "databaseName": "database_1",
+        "poolerMaxDBConnections": null,
+        "poolerEnable": false,
+        "backupConfig": {
+            "bucket": "53888-bk-de42f-",
+            "endpoint": "hcm.vngcloud.vn",
+            "s3AccessKey": "fde71466d62c3e",
+            "s3SecretKey": "RdRLXvwn2rijDTVe5C",
+            "incrementalIsEnable": null,
+            "locationId": null,
+            "policyId": null
+        },
+        "managementSubnetId": "sub-db8-9a07 a54daba3756f",
+        "managementVolumeTypeId": "vty45b018",
+        "managementVolumeSize": 20,
+        "templateId": "9f4b2a-965",
+        "zoneId": "HCM03-1A",
+        "restoreConfig": null
+    }
+]
